@@ -222,7 +222,8 @@ def llm_summarize_conversation():
     full_conversation = "\n".join(
         f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[st.session_state.chat_start_index:]
     )
-    docs = [Document(page_content=full_conversation)]
+    # st.write("Debug", full_conversation)
+    docs = [Document(page_content=f"{full_conversation}\n\n.סכם את השיחה בעברית בצורה תמציתית וברורה")]
 
     summarize_chain = load_summarize_chain(llm=st.session_state.llm, chain_type="stuff")
     return summarize_chain.run(docs)
