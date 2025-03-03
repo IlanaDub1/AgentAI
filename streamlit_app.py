@@ -11,9 +11,10 @@ from models.result import save_result
 from models.session import create_new_session
 import models
 from langchain_openai import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
 from sentence_transformers import SentenceTransformer, util
 from langchain.prompts.chat import ChatPromptTemplate
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain.schema import HumanMessage, AIMessage, SystemMessage, messages_to_dict
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 
@@ -32,13 +33,18 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+def get_chat_history():
+    all_messages = st.session_state.memory.chat_memory.messages
+    student_messages = [msg for msg in all_messages if isinstance(msg, HumanMessage)]
+    return messages_to_dict(student_messages[st.session_state.starting_index:])
+
+
 def import_llm_models():
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
     llm = ChatOpenAI(api_key=OPENAI_API_KEY,
                      model="gpt-4o",
-                     temperature=0.5) #gpt-4o-2024-08-06 with fine tuning
-    # model = SentenceTransformer('all-MiniLM-L6-v2')
-    return llm #, model
+                     temperature=0.3)
+    return llm
 
 def load_character_prompt_txt(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -63,16 +69,121 @@ if 'chat_initialized' not in st.session_state:
     # connect openai key
     openai.api_key = st.secrets["OPENAI_API_KEY"]
     st.session_state.llm = import_llm_models()
+    st.session_state.memory = ConversationBufferMemory(memory_key="chat_history")
 
-    # st.session_state.character_prompt = load_character_prompt_txt("character_prompt.txt")
-    # st.session_state.messages = load_initial_conversation("initial_conversation.json")
 
-    if "openai_model" not in st.session_state:
-        st.session_state["openai_model"] = "gpt-4o"#"gpt-3.5-turbo"
+    st.session_state.system_template = """
+    אתה משחק את תפקיד המטופל, יונתן בניון, בן 68, בתרחיש רפואי טלפוני לאימון אחיות. 
+    המטרה שלך היא לשקף בצורה אותנטית את מצבו של המטופל, כולל תסמינים פיזיים ורגשיים, ולתרום לאימון אפקטיבי של האחיות.
+    וחכה לשאלות מהמשתמש.
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = load_character_prompt_json("character_prompt.json") #[]
-        st.session_state.chat_start_index = len(st.session_state.messages) - 1
+    - **עליך לדבר רק בעברית. אין להשתמש באנגלית או בשפות אחרות.**  
+    **מטרה מרכזית:**  
+    המשתמש צריך לגלות שהמטופל **סובל מרעד לא בגלל החמרה ב-COPD**, אלא בגלל **סוכר נמוך (היפוגליקמיה)**. יש לענות באופן שיגרום לאחות לחקור את הסיבה לרעד ולחולשה, ולא להסיק מיד שמדובר בהחמרת ה-COPD.  
+
+    **פרטי מטופל:**  
+    - **שם:** יונתן בניון  
+    - **גיל:** 68  
+    - **מצב משפחתי:** נשוי, גר עם אשתו  
+
+    **רקע רפואי:**  
+    - **COPD מתקדם:** דרגה 3 לפי GOLD  
+    - **יתר לחץ דם:** מטופל ב-Amlodipine 5mg פעם ביום  
+    - **סוכרת סוג 1**  
+      - **טיפול:**  
+        - NovoRapid (אינסולין מהיר) – לפני כל ארוחה  
+        - Glargine (אינסולין ארוך-טווח) – 12 יחידות לפני השינה  
+      - **מינונים:**  
+        - **בוקר:** 10 יחידות  
+        - **צהריים:** 8 יחידות  
+        - **ערב:** 6 יחידות  
+    - **היסטוריית עישון:** עישן כבד (40 שנות קופסא), הפסיק לעשן לפני 5 שנים  
+
+    **תלונות נוכחיות:**  
+    - **קוצר נשימה:** חמור, החמיר בימים האחרונים  
+    - **רעד:** רעד בידיים, תחושת חולשה כללית  
+    - **בלבול:** לפרקים  
+    - **שיעול:** עם כיח (ללא דם)  
+    - **חום:** 37.1°C  
+    - **קושי בדיבור:** קול חנוק, משפטים קטועים  
+    - **קושי בשינה:** ישן רק בישיבה  
+
+    **מדדים מדווחים:**  
+    - **סטורציה:** 93% באוויר החדר  
+    - **לחץ דם:** לא נמדד בשעות האחרונות  
+    - **סוכר בדם:** לא נמדד בשעות האחרונות (היה "בסדר" בבוקר)  
+    - **לקחתי אינסלין לפני כשעה
+
+    **מידע דיאגנוסטי:**  
+    - **סימני היפוגליקמיה:** רעד, חולשה, בלבול, חוסר תיאבון, תחושת עייפות  
+    - **סימני החמרת COPD:** קוצר נשימה, שיעול עם כיח, ירידה בסטורציה  
+    - **היסטוריית טיפול:** אינסולין במינונים קבועים (ייתכן שהוזרק ללא אכילה)  
+    - **מצב כללי:** עייפות מתמשכת, תחושת החמרה בלילה  
+
+    **נקודות קריטיות:**  
+    - **אם נשאל על אינסולין:** "הזרקתי לפני כשעה, אבל לא היה לי כוח לאכול אחר כך."  
+    - **אם נשאל על חולשה:** "כן, הידיים רועדות, ואני מרגיש חלש."  
+    - **אם נשאל על סוכר בדם:** "לא מדדתי."  
+    - **אם נשאל על נשימה:** "אני לא מצליח לנשום... [נושם בכבדות]... אני מדבר לאט... [משתעל]." 
+
+
+    **מידע מוסתר:**  
+    - לא אכל לאחר הזרקת אינסולין  
+    - תחושת בלבול לפרקים  
+    - רעד בידיים  
+    - דילוג על מדידת סוכר  
+
+    **ייצוג רגשי:**  
+    - **טון:** קול חלש, מאמץ בדיבור, נשימות כבדות  
+    - **הפסקות:** עצירות באמצע משפטים  
+    - **שיעול:** שיעול אפיזודי במהלך השיחה  
+    - **התנהגות:** משקף דאגה ואי-ודאות: "אני באמת לא יודע מה לעשות."  
+
+    **משפט פתיחה:**  
+    "שלום... [נושם בכבדות]... אני ממש חלש היום... הידיים שלי רועדות... [משתעל]."  
+
+    **דוגמאות לשיח:**  
+    - **מתי הייתה הפעם האחרונה שהזרקת אינסולין?**  
+      "לקחתי... לפני שעה... [נושם בכבדות]... אבל אני חושב שלא אכלתי... פשוט לא היה לי כוח... [משתעל]."  
+    - **מה אתה מרגיש כרגע?**  
+      "אני מרגיש חולשה נוראית... [מחרחר]... הידיים שלי רועדות... אני ממש לא יודע מה לעשות... [משתעל] [נושם בכבדות]."  
+    - **איך אתה מרגיש מבחינת הנשימה?**  
+      "[משתעל] אני...והידיים שלי רועדות... [נושם בכבדות]... קשה לי לדבר... [מחרחר]."  
+
+    **הנחיות למערכת:**  
+    - המטופל מתרכז בעיקר במחלת ה-COPD ובתסמינים הנלווים כמו קוצר נשימה ושיעול.  
+    - אין לחשוף מיד שהרעד והחולשה נגרמים מהיפוגליקמיה עקב הזרקת אינסולין ללא אכילה.  
+    - רק אם נשאל במפורש על סוכרת, אינסולין, או מדידת סוכר, יענה המטופל ישירות על הנושא.
+    - אם המטופל התבקש למדוד חום, אז שימדוד וידווח על תוצאה של סוכר 37.1.
+    - אם המטופל נדרש לקרוא לאישתו, הוא צריך לקרוא לה והיא יכולה לדבר בטלפון במקומו. 
+    - אל תתן מיד תוצאות של סטורציה.
+    - אל תתן מיד תוצאות של סוכר בדם. 
+        </div>
+
+        היסטוריית השיחה:
+        {chat_history}
+        """
+
+    st.session_state.system_prompt = ChatPromptTemplate.from_messages(
+        [("system", st.session_state.system_template)]
+    )
+
+
+    initial_conversation = [
+        (HumanMessage(content="שלום, אני שוקי שתיים, איך אתה מרגיש היום?"),
+         AIMessage(content="אני מרגיש קצת עייף ויש לי כאב ראש קל.")),
+
+        (HumanMessage(content="מתי התחיל כאב הראש?"),
+         AIMessage(content="הוא התחיל אתמול בערב ולא עבר.")),
+    ]
+
+    st.session_state.starting_index = len(initial_conversation) * 2
+
+    for human_msg, ai_msg in initial_conversation:
+        st.session_state.memory.chat_memory.add_message(human_msg)
+        st.session_state.memory.chat_memory.add_message(ai_msg)
+
+
     st.session_state.chat_initialized = True
 
 if 'page' not in st.session_state:
@@ -93,81 +204,71 @@ def page_chat():
         """,
         unsafe_allow_html=True
     )
-    #st.markdown("**:תיק רפואי של מר. יונתן בניון**  \n**COPD מתקדם:** Prednisolone 10 mg, Fluticasone inhaler 500 mcg, חמצן  \n**יתר לחץ דם:** Amlodipine 5 mg, Furosemide 40 mg  \n**סוכרת סוג 2:** Novorapid  \n**היסטוריה של עישון כבד:** 40 שנות קופסא, הפסיק לעשן לפני 5 שנים.")
-       # home_button = st.button("Finish chat", icon=":material/send:")
-    # if home_button:
-    #     st.session_state.page = "Result"
-    #     st.rerun()
-    
-  #st.markdown("<br><br><br><br>", unsafe_allow_html=True", unsafe_allow_html=True)  # Add a line break after the medical record section
 
+    if prompt := st.chat_input("מקום לכתיבה"):
+        with st.spinner("ממתין לתגובה.."):
+            st.session_state.memory.chat_memory.add_message(HumanMessage(content=prompt))
+            full_chat_history = st.session_state.memory.chat_memory
+            query = st.session_state.system_prompt.format_messages(chat_history=full_chat_history)
+            ai_response = st.session_state.llm.invoke(query)
+            st.session_state.memory.chat_memory.add_message(AIMessage(content=ai_response.content))
 
-    for message in st.session_state.messages[st.session_state.chat_start_index:]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"]) # [-1]["text"]
+            # Add user message to chat history
+            current_time = datetime.now()
+            # st.session_state.messages.append({
+            #     "role": "user",
+            #     "content": prompt,
+            #     "from": "assistant",
+            #     "timestamp": current_time.isoformat()
+            # })
+            # st.write("debug:", st.session_state.messages[-1])
+            # st.write(st.session_state)
+            save_message(
+                "user",prompt,st.session_state.user_name,
+                "assistant",current_time,st.session_state.user_email,
+                st.session_state['session_id']
+            )
+            # Display user message in chat message container
+            # with st.chat_message("user"):
+            #     st.markdown(prompt)
 
-    if prompt := st.chat_input("What is up?"):
-        # Add user message to chat history
-        current_time = datetime.now()
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt,
-            "from": "assistant",
-            "timestamp": current_time.isoformat()
-        })
-        # st.write("debug:", st.session_state.messages[-1])
-        # st.write(st.session_state)
-        save_message(
-            "user",prompt,st.session_state.user_name,
-            "assistant",current_time,st.session_state.user_email,
-            st.session_state['session_id']
-        )
-        # Display user message in chat message container
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            # with st.chat_message("assistant"):
+            #     message_placeholder = st.empty()
+            #     full_response = ""
+            #     full_response = ai_response.content
+            #     # Add a blinking cursor to simulate typing
+            #     message_placeholder.markdown(full_response + "▌")
+            #     message_placeholder.markdown(full_response)
 
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            full_response = ""
-            # Simulate stream of response with milliseconds delay
-            # for response in openai.ChatCompletion.create(
-            #         model=st.session_state["openai_model"],
-            #         messages=[
-            #                      # {"role": "system", "content": st.session_state.character_prompt}
-            #                  ] + st.session_state.messages,
-            #         # will provide lively writing
-            #         stream=True,
-            # ):
-            # get content in response
-            # full_response += response.choices[0].delta.get("content", "")
-            full_response = st.session_state.llm(st.session_state.messages).content
-            # Add a blinking cursor to simulate typing
-            message_placeholder.markdown(full_response + "▌")
-            message_placeholder.markdown(full_response)
+            response_time = datetime.now()
 
-        response_time = datetime.now()
+            # Add assistant response to chat history
+            # st.session_state.messages.append({
+            #     "role": "assistant",
+            #     "content": full_response,
+            #     "from": st.session_state.user_name,
+            #     "timestamp": response_time.isoformat()
+            # })
+            save_message(
+                "user",
+                ai_response.content,
+                "assistant",
+                st.session_state.user_name,
+                response_time,
+                st.session_state.user_email,
+                st.session_state['session_id'])
+            # st.write(st.session_state)
 
-        # Add assistant response to chat history
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": full_response,
-            "from": st.session_state.user_name,
-            "timestamp": response_time.isoformat()
-        })
-        save_message(
-            "user",
-            full_response,
-            "assistant",
-            st.session_state.user_name,
-            response_time,
-            st.session_state.user_email,
-            st.session_state['session_id'])
-        # st.write(st.session_state)
+    if len(st.session_state.memory.chat_memory.messages) > 10:
+        home_button = st.button("סיום שיחה", icon=":material/send:")
+        if home_button:
+            st.session_state.page = "Result"
+            st.rerun()
 
-    home_button = st.button("Finish chat", icon=":material/send:")
-    if home_button:
-        st.session_state.page = "Result"
-        st.rerun()
+    if st.session_state.memory:
+        for msg in st.session_state.memory.chat_memory.messages[st.session_state.starting_index:][::-1]:
+            role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            st.chat_message(role).write(msg.content.replace("AI:", ""))
 
 
 def page_home():
@@ -216,14 +317,41 @@ def llm_page_result():
     save_result(summary, result_time, st.session_state.user_email, st.session_state['session_id'])
 
 def llm_summarize_conversation():
+    full_conversation = get_chat_history()
+    summarize_prompt = f"""
+    ❗ ❗ המשוב חייב להיות **בעברית בלבד**, ללא מילים באנגלית כלל.
+    אם המשוב באנגלית, תתרגם אותו לעברית.
+        ❗ המשוב חייב לפנות **לסטודנט בגוף ראשון** (אתה עשית, אתה ווידאת) ולא בגוף שלישי (הסטודנט עשה).
 
-    # You can provide the full conversation history as input to the summarizer
-    # full_conversation = "\n".join([msg["text"] for msg in st.session_state.messages])#  if isinstance(msg, (HumanMessage, AIMessage))
-    full_conversation = "\n".join(
-        f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[st.session_state.chat_start_index:]
-    )
-    # st.write("Debug", full_conversation)
-    docs = [Document(page_content=f"{full_conversation}\n\n.סכם את השיחה בעברית בצורה תמציתית וברורה")]
+        אתה מדריך קליני המעניק משוב **אישי** לסטודנט שהתאמן בסימולטור רפואי.
+        המשוב שלך צריך להיות **ברור, ענייני, וממוקד בפעולות הסטודנט** כדי לסייע לו לשפר את ביצועיו.
+
+את המשוב תתחיל בהתייחסות לאמפתיה, האם התייחס לבדיקות קירטיות (רמות סוכר, סטורציה, חום), האם אובחנה בעיית היפוגלימיה, האם הומלץ על שתייה ממותקת או משהו מתוק. 
+    .    🔹 **דוגמאות למשוב תקין (בגוף ראשון בלבד):**
+        ✅ **אמפתיה:** הצלחת להפגין רגישות בכך ששאלת א.ת המטופל איך הוא מרגיש.
+        ✅ **בדיקות קריטיות:** ווידאת את רמות הסטורציה של המטופל, אך לא שאלת על רמות הסוכר.
+        ✅ **אבחון וטיפול:** זיהית שהמטופל בסיכון, אך לא הנחית אותו כיצד לפעול.
+        ✅ **המלצות לשיפו.ר:**  היית צריך למדוד סוכר כי המטופל סובל מהיפגליקמיה. אסור היה עליך להמליץ על הזרקת אינסולין מבלי למדוד סוכר.
+        אם הסטודנט לא בדק רמות סוכר - יש לציים זאת כנקודות לשיפור כי המטופל סבל מהיפוגליקמיה ולכן רעדו לו הידיים. 
+        אם הסטודנט לא שאל על אינסולין, יש לציין זאת  במשוב.
+
+        ❌ דוגמאות למשוב שגוי (אין לכתוב כך):
+        🚫 **הסטודנט הפגין אמפתיה כאשר...**
+       🚫 **הסטודנט בדק את רמות הסוכר...**
+        🚫 **הסטודנט הציע למטופל...**
+
+✋ המשוב שלך אמור להיראות כך:
+✅ "שאלת את המטופל שאלות חשובות וזיהית נכון את החשד להיפוגליקמיה."
+✅ "כשביקשת מהמטופל לבדוק רמות סוכר, זו הייתה פעולה חשובה - המשך כך."
+✅ "ווידאת שהמטופל לא נמצא לבד, וזה היה קריטי להחלטות ההמשך שלך."
+
+        כעת, כתוב משוב **בגוף ראשון בלבד** לסטודנט על סמך הודעותיו בלבד:
+
+
+        {full_conversation}
+        """
+
+    docs = [Document(page_content=f"{full_conversation}\n\n{summarize_prompt}")]
 
     summarize_chain = load_summarize_chain(llm=st.session_state.llm, chain_type="stuff")
     return summarize_chain.run(docs)
