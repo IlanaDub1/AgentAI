@@ -259,7 +259,7 @@ def page_chat():
                 st.session_state['session_id'])
             # st.write(st.session_state)
 
-    if len(st.session_state.memory.chat_memory.messages) > 10:
+    if len(st.session_state.memory.chat_memory.messages) > 1000:
         home_button = st.button("סיום שיחה", icon=":material/send:")
         if home_button:
             st.session_state.page = "Result"
