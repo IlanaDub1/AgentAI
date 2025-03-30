@@ -23,22 +23,35 @@ class User(Base):
 #     Session.commit()
 
 
+# def add_user(new_user, user_email):
+#     if get_user_by_email(user_email):
+#         return
+#     dbsession = scoped_session(SessionLocal)
+#     try:
+#         dbsession.add(new_user)
+#         dbsession.commit()
+#     except:
+#         dbsession.rollback()
+#         raise
+#     finally:
+#         dbsession.remove()
+
+from sqlalchemy.exc import IntegrityError
+
 def add_user(new_user, user_email):
-    if get_user_by_email(user_email):
-        return
     dbsession = scoped_session(SessionLocal)
     try:
         dbsession.add(new_user)
         dbsession.commit()
-    except:
+    except IntegrityError:
         dbsession.rollback()
+        print(f"User with email {user_email} already exists.")
+    except Exception as e:
+        dbsession.rollback()
+        print(f"Error adding user {user_email}: {e}")
         raise
     finally:
         dbsession.remove()
-
-# def get_user_by_email(email):
-#     user = Session.query(User).filter(User.email == email).first()
-#     return user
 
 def get_user_by_email(email):
     dbsession = scoped_session(SessionLocal)
