@@ -230,7 +230,8 @@ def page_chat():
             try:
                 ai_response = safe_request(st.session_state.llm, messages)
             except Exception as e:
-                print(f"Final failure after retries: {e}")
+                print(f"(chat)Final failure after retries: {e}")
+                raise
 
             st.session_state.memory.chat_memory.add_message(AIMessage(content=ai_response))  # Save AI response
 
@@ -292,7 +293,7 @@ def page_result():
             try:
                 feedback = safe_request(st.session_state.llm, evaluation_prompt)
             except Exception as e:
-                print(f"Final failure after retries: {e}")
+                print(f"(result)Final failure after retries: {e}")
                 raise
             
             # Display feedback
