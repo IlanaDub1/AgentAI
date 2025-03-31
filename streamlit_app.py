@@ -72,7 +72,7 @@ def get_next_api_key():
 # Check if it's the first time the user is interacting
 if "api_key" not in st.session_state:
     st.session_state.api_key = get_next_api_key()
-    st.write(st.session_state.api_key[-10:])
+    st.write(st.session_state.api_key[-5:])
 
 # More aggressive CSS targeting approach
 st.markdown("""
