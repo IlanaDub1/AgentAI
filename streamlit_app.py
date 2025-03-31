@@ -293,6 +293,7 @@ def page_result():
                 feedback = safe_request(st.session_state.llm, evaluation_prompt)
             except Exception as e:
                 print(f"Final failure after retries: {e}")
+                raise
             
             # Display feedback
             st.write(feedback)

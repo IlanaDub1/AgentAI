@@ -8,7 +8,7 @@ engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)#, echo=True,pool_pre_ping
 
 # Create session maker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Session = SessionLocal()
+# Session = SessionLocal()
 
 # Base class for models
 Base = declarative_base()
