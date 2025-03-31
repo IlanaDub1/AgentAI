@@ -39,15 +39,23 @@ def safe_request(chat_instance, prompt):
 API_KEYS = st.secrets["openai_api_keys"]["keys"]
 
 
-# Create a function to get the next API key in round-robin fashion
-def get_round_robin_key():
-    # Get the index of the current key to assign
-    current_index = st.session_state.get("api_key_index", 0)
-    api_key = API_KEYS[current_index]
+def get_next_api_key():
+    try:
+        # Read the current index from a file (or another persistent storage)
+        with open("api_key_index.txt", "r") as f:
+            index = int(f.read())
+    except (FileNotFoundError, ValueError):
+        index = 0  # default to the first API key
 
-    # Update the index for the next user
-    next_index = (current_index + 1) % len(API_KEYS)
-    st.session_state["api_key_index"] = next_index
+    # Get the API key for this session
+    api_key = API_KEYS[index]
+
+    # Update the index for the next session
+    next_index = (index + 1) % len(API_KEYS)
+
+    # Save the updated index back to the file
+    with open("api_key_index.txt", "w") as f:
+        f.write(str(next_index))
 
     return api_key
 
@@ -61,11 +69,10 @@ def get_round_robin_key():
 # Streamlit styling for RTL Hebrew support
 # Apply custom CSS to hide all Streamlit branding and set RTL direction
 
-import streamlit as st
-
 # Check if it's the first time the user is interacting
 if "api_key" not in st.session_state:
-    st.session_state.api_key = get_round_robin_key()
+    st.session_state.api_key = get_next_api_key()
+    st.write(st.session_state.api_key[-10:])
 
 # More aggressive CSS targeting approach
 st.markdown("""
