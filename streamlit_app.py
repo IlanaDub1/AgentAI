@@ -36,8 +36,23 @@ def safe_request(chat_instance, prompt):
         raise
 
 
+API_KEYS = st.secrets["openai_api_keys"]["keys"]
+
+
+# Create a function to get the next API key in round-robin fashion
+def get_round_robin_key():
+    # Get the index of the current key to assign
+    current_index = st.session_state.get("api_key_index", 0)
+    api_key = API_KEYS[current_index]
+
+    # Update the index for the next user
+    next_index = (current_index + 1) % len(API_KEYS)
+    st.session_state["api_key_index"] = next_index
+
+    return api_key
+
 # Load environment variables
-os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+# os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 #os.environ["LANGCHAIN_TRACING_V2"] = "true"
 #os.environ["LANGCHAIN_ENDPOINT"] = st.secrets["LANGSMITH_ENDPOINT"]
 #os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
@@ -47,6 +62,10 @@ os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 # Apply custom CSS to hide all Streamlit branding and set RTL direction
 
 import streamlit as st
+
+# Check if it's the first time the user is interacting
+if "api_key" not in st.session_state:
+    st.session_state.api_key = get_round_robin_key()
 
 # More aggressive CSS targeting approach
 st.markdown("""
@@ -94,7 +113,7 @@ st.markdown("""
 
 # Initialize OpenAI Model
 def import_llm_models():
-    return ChatOpenAI(model="gpt-4o", temperature=0.4)
+    return ChatOpenAI(api_key=st.session_state.api_key, model="gpt-4o", temperature=0.4)
 
 # Initialize session state
 if 'chat_initialized' not in st.session_state:
