@@ -172,13 +172,13 @@ def page_chat():
     st.title("מוקד רפואה מרחוק")
     st.markdown(
         """
-        <div style="background-color: #f0f8ff; padding: 10px; border-radius: 10px;direction: rtl; text-align: right;">
-            <strong>תיק רפואי של מר. יונתן בניון:</strong> <br>
-            <strong>COPD מתקדם:</strong> Prednisolone 10 mg, Fluticasone inhaler 500 mcg, חמצן <br>
-            <strong>יתר לחץ דם:</strong> Amlodipine 5 mg, Furosemide 40 mg <br>
-            <strong>סוכרת סוג 1:</strong> Novorapid, Glargine <br>
-            <strong>היסטוריה של עישון כבד:</strong> 40 שנות קופסא, הפסיק לעשן לפני 5 שנים
-        </div>
+              <div style="background-color: #f0f8ff; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
+            <strong>תיק רפואי של גב' אנונימית:</strong> <br>
+            <strong>הריון 3, ילד 2:</strong> לידה בניתוח קיסרי לפני שבועיים <br>
+            <strong>עישון כבד:</strong> 10 שנות קופסא <br>
+            <strong>השמנת יתר:</strong> לאחר ניתוח בריאטרי (Roux & Y) לפני 7 שנים <br>
+            <strong>סוכרת הריונית:</strong> טופלה באינסולין במהלך ההריון
+            </div>
         """,
         unsafe_allow_html=True
     )
