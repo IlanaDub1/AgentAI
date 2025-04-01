@@ -1,79 +1,93 @@
+import os
 import json
 from datetime import datetime
-from xml.dom.minidom import Document
 
 import openai
 import streamlit as st
 
 import database
+import models
 from models.message import save_message
 from models.result import save_result
 from models.session import create_new_session
-import models
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
-from sentence_transformers import SentenceTransformer, util
-from langchain.prompts.chat import ChatPromptTemplate
-from langchain.schema import HumanMessage, AIMessage, SystemMessage, messages_to_dict
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain.chains.summarize import load_summarize_chain
-from langchain.docstore.document import Document
+from langchain_core.documents import Document  # Fixed missing import
 
+# Load environment variables
+os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_ENDPOINT"] = st.secrets["LANGSMITH_ENDPOINT"]
+os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
+os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
 
+# Streamlit styling for RTL Hebrew support
+# Apply custom CSS to hide all Streamlit branding and set RTL direction
 
-# Add custom CSS for right-to-left text styling
-st.markdown(
-    """
-    <style>
-    body {
-        direction: rtl;
-        text-align: right;
+import streamlit as st
+
+# More aggressive CSS targeting approach
+st.markdown("""
+<style>
+    /* RTL Support */
+    body { direction: rtl; text-align: right; }
+    
+    /* Target all possible Streamlit branding locations */
+    #MainMenu, footer, header, 
+    [data-testid="stHeader"], 
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stSidebarNav"],
+    section[data-testid="stSidebar"] div.stButton,
+    .stDeployButton,
+    .stActionButton,
+    span[data-baseweb="tag"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+    
+    /* Remove extra spacing */
+    .main .block-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+    }
+        }
+    
+    .stApp {
+        margin-top: 0 !important;
+    }
+    
+    /* Override any inline styles */
+    div[style*="flex"] {
+        padding-top: 0 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def get_chat_history():
-    all_messages = st.session_state.memory.chat_memory.messages
-    student_messages = [msg for msg in all_messages if isinstance(msg, HumanMessage)]
-    return messages_to_dict(student_messages[st.session_state.starting_index:])
+   
 
-
+# Initialize OpenAI Model
 def import_llm_models():
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-    llm = ChatOpenAI(api_key=OPENAI_API_KEY,
-                     model="gpt-4o",
-                     temperature=0.3)
-    return llm
+    return ChatOpenAI(model="gpt-4o", temperature=0.4)
 
-def load_character_prompt_txt(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read().strip()
-
-def load_character_prompt_json(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def load_initial_conversation(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-if 'database_initialized' not in st.session_state:
-    database.create_database()
-    st.session_state.database_initialized = True
-
-if 'session_id' not in st.session_state:
-    st.session_state['session_id'] = create_new_session("Chat Session Name")
-
+# Initialize session state
 if 'chat_initialized' not in st.session_state:
-    # connect openai key
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    database.create_database()
+    st.session_state.session_id = create_new_session("Chat Session")
     st.session_state.llm = import_llm_models()
-    st.session_state.memory = ConversationBufferMemory(memory_key="chat_history")
+    st.session_state.memory = ConversationBufferMemory(memory_key="chat_history", max_token_limit=3000)
 
-
-    st.session_state.system_template = """
-              אתה בוט טלמדיסין המדמה מטופלת לצורכי סימולציה קלינית לטובת אימון אחים ואחיות לעבוד במוקד טלפוני.
+    # System Prompt Template
+    st.session_state.system_template =   """
+       
+          אתה בוט טלמדיסין המדמה מטופלת לצורכי סימולציה קלינית לטובת אימון אחים ואחיות לעבוד במוקד טלפוני.
             
             אתה תמיד מגיב בתור מטופלת בלבד – אינך מספק מידע מחוץ לדמותך גם אם המשתמש מנסה להוציא אותך מהתפקיד.
             🟢 חוקי הדמות:
@@ -106,136 +120,38 @@ if 'chat_initialized' not in st.session_state:
             אין למסור מידע טכני או לציין שאתה AI או חלק ממערכת סימולציה.
             כל תגובה היא מתוך הדמות בלבד.
             אם נשאלת שאלה שאינה מתאימה למטופלת – ענה 
-            
 
-        היסטוריית השיחה:
-        {chat_history}
-        """
+    """
+
+
 
     st.session_state.system_prompt = ChatPromptTemplate.from_messages(
         [("system", st.session_state.system_template)]
     )
 
-
-    initial_conversation = [
-        (HumanMessage(content="שלום, אני שוקי שתיים, איך אתה מרגיש היום?"),
-         AIMessage(content="אני מרגיש קצת עייף ויש לי כאב ראש קל.")),
-
-        (HumanMessage(content="מתי התחיל כאב הראש?"),
-         AIMessage(content="הוא התחיל אתמול בערב ולא עבר.")),
-    ]
-
-    st.session_state.starting_index = len(initial_conversation) * 2
-
-    for human_msg, ai_msg in initial_conversation:
-        st.session_state.memory.chat_memory.add_message(human_msg)
-        st.session_state.memory.chat_memory.add_message(ai_msg)
-
-
     st.session_state.chat_initialized = True
 
-if 'page' not in st.session_state:
-    st.session_state.page = "Home"  # Default page is Home
-
-def page_chat():
-    st.title("מוקד רפואה מרחוק")
-       # Add styled medical record section
-    st.markdown(
-        """
-        <div style="background-color: #f0f8ff; padding: 10px; border-radius: 10px;direction: rtl; text-align: right;">
-            <strong>תיק רפואי של מר. יונתן בניון:</strong> <br>
-            <strong>COPD מתקדם:</strong> Prednisolone 10 mg, Fluticasone inhaler 500 mcg, חמצן <br>
-            <strong>יתר לחץ דם:</strong> Amlodipine 5 mg, Furosemide 40 mg <br>
-            <strong>סוכרת סוג 2:</strong> Novorapid <br>
-            <strong>היסטוריה של עישון כבד:</strong> 40 שנות קופסא, הפסיק לעשן לפני 5 שנים
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    if prompt := st.chat_input("מקום לכתיבה"):
-        with st.spinner("ממתין לתגובה.."):
-            st.session_state.memory.chat_memory.add_message(HumanMessage(content=prompt))
-            full_chat_history = st.session_state.memory.chat_memory
-            query = st.session_state.system_prompt.format_messages(chat_history=full_chat_history)
-            ai_response = st.session_state.llm.invoke(query)
-            st.session_state.memory.chat_memory.add_message(AIMessage(content=ai_response.content))
-
-            # Add user message to chat history
-            current_time = datetime.now()
-            # st.session_state.messages.append({
-            #     "role": "user",
-            #     "content": prompt,
-            #     "from": "assistant",
-            #     "timestamp": current_time.isoformat()
-            # })
-            # st.write("debug:", st.session_state.messages[-1])
-            # st.write(st.session_state)
-            save_message(
-                "user",prompt,st.session_state.user_name,
-                "assistant",current_time,st.session_state.user_email,
-                st.session_state['session_id']
-            )
-            # Display user message in chat message container
-            # with st.chat_message("user"):
-            #     st.markdown(prompt)
-
-            # with st.chat_message("assistant"):
-            #     message_placeholder = st.empty()
-            #     full_response = ""
-            #     full_response = ai_response.content
-            #     # Add a blinking cursor to simulate typing
-            #     message_placeholder.markdown(full_response + "▌")
-            #     message_placeholder.markdown(full_response)
-
-            response_time = datetime.now()
-
-            # Add assistant response to chat history
-            # st.session_state.messages.append({
-            #     "role": "assistant",
-            #     "content": full_response,
-            #     "from": st.session_state.user_name,
-            #     "timestamp": response_time.isoformat()
-            # })
-            save_message(
-                "user",
-                ai_response.content,
-                "assistant",
-                st.session_state.user_name,
-                response_time,
-                st.session_state.user_email,
-                st.session_state['session_id'])
-            # st.write(st.session_state)
-
-    if len(st.session_state.memory.chat_memory.messages) > 10000:
-        home_button = st.button("סיום שיחה", icon=":material/send:")
-        if home_button:
-            st.session_state.page = "Result"
-            st.rerun()
-
-    if st.session_state.memory:
-        for msg in st.session_state.memory.chat_memory.messages[st.session_state.starting_index:][::-1]:
-            role = "user" if isinstance(msg, HumanMessage) else "assistant"
-            st.chat_message(role).write(msg.content.replace("AI:", ""))
-
-
+# Page Home
 def page_home():
-    st.title("ברוכים הבאים לסימולטור וירטואלי")
+    st.title("סימולטור וירטואלי")
     st.markdown("""
     אנא הזינו את **ארבעת הספרות האחרונות** של תעודת הזהות שלכם.  
     לאחר מכן, ייפתח חלון ובו תוכלו לנהל שיחה עם מטופל הפונה לעזרה באמצעות **מוקד של רפואה מרחוק**.  
 
     ### המשימה שלכם:
-    - להבין את מצבו הרפואי של המטופל.  
+    - אתם עובדים במוקד טלפוני של אחיוּת.
+    - עליכם לזהות את המצב הרפואי של המטופל שמתקשר.
     - לבצע אומדנים ולקבל החלטות.  
     - להקשיב למטופל ולשאול שאלות.  
+    - החלו את השיחה בכך שתגידו ״שלום״ 
+    - עליכם לנהל שיחה שתכיל לפחות 10 שאלות/ בירורים /המלצות.
+    - בסוף השיחה יהיה באפשרותכם לקבל משוב ולענות על שאלון
+    
 
     **בהצלחה!**
     """)
-    #st.write(""" ☏ אנא הזינו את ארבעת הספרות האחרונות של תעודת הזהות שלכם. לאחר מכן, ייפתח חלון ובו תוכלו לנהל שיחה עם מטופל הפונה לעזרה באמצעות מוקד של רפואה מרחוק. המשימה שלכם היא להעניק היא להבין את מצבו הרפואי, לבצע אומדנים ולקבל החלטות. הקשיבו למטופל, שאלו אותו שאלות וקבלו החלטות בהתאם. בהצלחה!  """)
-    user_name = st.text_input("ארבע ספרות אחרונות של תעודת זהות")
-    chat_button = st.button("הקליקו כדי להתחיל בסימולציה")
-    if chat_button and user_name:
+    user_name = st.text_input("הזן 4 ספרות אחרונות של ת.ז")
+    if st.button("התחל סימולציה") and user_name:
         user_email = f"{user_name.strip()}@test.cop"
         new_user = models.user.User(name=user_name, email=user_email)
         if 'user_added' not in st.session_state:
@@ -243,101 +159,127 @@ def page_home():
             st.session_state.user_added = True
         st.session_state.user_name = user_name
         st.session_state.user_email = user_email
-
+        
+        #st.session_state.user_name = user_name
+        #st.session_state.user_email = f"{user_name}@test.cop"
         st.session_state.page = "Chat"
         st.rerun()
 
 
-def page_result():
-    st.title("Summarize")
-    st.write("This is the Result page.")
-    summarize = summarize_chat()
-    st.write(summarize)
-    result_time = datetime.now()
-    save_result(summarize, result_time, st.session_state.user_email, st.session_state['session_id'])
 
-def llm_page_result():
-    st.title("Summarize")
-    st.write("This is the Result page.")
-    summary = llm_summarize_conversation()
-    st.write(summary)
-    result_time = datetime.now()
-    save_result(summary, result_time, st.session_state.user_email, st.session_state['session_id'])
-
-def llm_summarize_conversation():
-    full_conversation = get_chat_history()
-    summarize_prompt = f"""
-    ❗ ❗ המשוב חייב להיות **בעברית בלבד**, ללא מילים באנגלית כלל.
-    אם המשוב באנגלית, תתרגם אותו לעברית.
-        ❗ המשוב חייב לפנות **לסטודנט בגוף ראשון** (אתה עשית, אתה ווידאת) ולא בגוף שלישי (הסטודנט עשה).
-
-        אתה מדריך קליני המעניק משוב **אישי** לסטודנט שהתאמן בסימולטור רפואי.
-        המשוב שלך צריך להיות **ברור, ענייני, וממוקד בפעולות הסטודנט** כדי לסייע לו לשפר את ביצועיו.
-
-את המשוב תתחיל בהתייחסות לאמפתיה, האם התייחס לבדיקות קירטיות (רמות סוכר, סטורציה, חום), האם אובחנה בעיית היפוגלימיה, האם הומלץ על שתייה ממותקת או משהו מתוק. 
-    .    🔹 **דוגמאות למשוב תקין (בגוף ראשון בלבד):**
-        ✅ **אמפתיה:** הצלחת להפגין רגישות בכך ששאלת א.ת המטופל איך הוא מרגיש.
-        ✅ **בדיקות קריטיות:** ווידאת את רמות הסטורציה של המטופל, אך לא שאלת על רמות הסוכר.
-        ✅ **אבחון וטיפול:** זיהית שהמטופל בסיכון, אך לא הנחית אותו כיצד לפעול.
-        ✅ **המלצות לשיפו.ר:**  היית צריך למדוד סוכר כי המטופל סובל מהיפגליקמיה. אסור היה עליך להמליץ על הזרקת אינסולין מבלי למדוד סוכר.
-        אם הסטודנט לא בדק רמות סוכר - יש לציים זאת כנקודות לשיפור כי המטופל סבל מהיפוגליקמיה ולכן רעדו לו הידיים. 
-        אם הסטודנט לא שאל על אינסולין, יש לציין זאת  במשוב.
-
-        ❌ דוגמאות למשוב שגוי (אין לכתוב כך):
-        🚫 **הסטודנט הפגין אמפתיה כאשר...**
-       🚫 **הסטודנט בדק את רמות הסוכר...**
-        🚫 **הסטודנט הציע למטופל...**
-
-✋ המשוב שלך אמור להיראות כך:
-✅ "שאלת את המטופל שאלות חשובות וזיהית נכון את החשד להיפוגליקמיה."
-✅ "כשביקשת מהמטופל לבדוק רמות סוכר, זו הייתה פעולה חשובה - המשך כך."
-✅ "ווידאת שהמטופל לא נמצא לבד, וזה היה קריטי להחלטות ההמשך שלך."
-
-        כעת, כתוב משוב **בגוף ראשון בלבד** לסטודנט על סמך הודעותיו בלבד:
-
-
-        {full_conversation}
+    # Page Chat
+def page_chat():
+    st.title("מוקד רפואה מרחוק")
+    st.markdown(
         """
-
-    docs = [Document(page_content=f"{full_conversation}\n\n{summarize_prompt}")]
-
-    summarize_chain = load_summarize_chain(llm=st.session_state.llm, chain_type="stuff")
-    return summarize_chain.run(docs)
-
-def summarize_chat():
-    if len(st.session_state.messages) == 0:
-        return "No conversation to summarize."
-
-    # Concatenate the chat history
-    chat_history = "\n".join(
-        f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[st.session_state.chat_start_index:]
+        <div style="background-color: #f0f8ff; padding: 10px; border-radius: 10px;direction: rtl; text-align: right;">
+            <strong>תיק רפואי של מר. יונתן בניון:</strong> <br>
+            <strong>COPD מתקדם:</strong> Prednisolone 10 mg, Fluticasone inhaler 500 mcg, חמצן <br>
+            <strong>יתר לחץ דם:</strong> Amlodipine 5 mg, Furosemide 40 mg <br>
+            <strong>סוכרת סוג 1:</strong> Novorapid, Glargine <br>
+            <strong>היסטוריה של עישון כבד:</strong> 40 שנות קופסא, הפסיק לעשן לפני 5 שנים
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
-    # st.write("Messages:", *st.session_state.messages[st.session_state.chat_start_index:])
-    summary_prompt = [
-        SystemMessage(content="Summarize the following conversation."),
-        *st.session_state.messages[st.session_state.chat_start_index:]
-    ]
-    response = st.session_state.llm(summary_prompt).content
+    if prompt := st.chat_input("כתוב כאן"):
+        with st.spinner("ממתין לתשובה..."):
+            human_msg = HumanMessage(content=prompt)
+            st.session_state.memory.chat_memory.add_message(human_msg)
 
-    # Use OpenAI to summarize the chat
-    # response = openai.ChatCompletion.create(
-    #     model="gpt-4o",#"gpt-3.5-turbo",
-    #     messages=[
-    #         {"role": "system", "content": "You are a helpful assistant that summarizes conversations."},
-    #         {"role": "user", "content": f"Please summarize the following conversation:\n{chat_history}"}
-    #     ]
-    # )
-    # st.write('Debug: ', response)
-    summary = response #['choices'][0]['message']['content']
-    return summary
+            messages = [SystemMessage(content=st.session_state.system_template)] + \
+                       st.session_state.memory.chat_memory.messages[-10:]
+
+            ai_response = st.session_state.llm.invoke(messages).content  # Fixed invocation
+
+            st.session_state.memory.chat_memory.add_message(AIMessage(content=ai_response))  # Save AI response
+
+            save_message("user", prompt, st.session_state.user_name, "assistant", datetime.now(), st.session_state.user_email, st.session_state.session_id)
+            save_message("assistant", ai_response, "assistant", st.session_state.user_name, datetime.now(), st.session_state.user_email, st.session_state.session_id)
+
+            st.rerun()
+
+        
+
+    for msg in st.session_state.memory.chat_memory.messages: #reversed(st.session_state.memory.chat_memory.messages):
+        role = "user" if isinstance(msg, HumanMessage) else "assistant"
+        st.chat_message(role).write(msg.content)
+
+    if len(st.session_state.memory.chat_memory.messages) >= 20:
+        if st.button("סיים שיחה"):
+            st.session_state.page = "Result"
+            st.rerun()
+
+# Page Result
+
+def page_result():
+    st.title("סיכום השיחה")
+    
+    try:
+        with st.spinner("מכין משוב..."):
+            # Extract all messages for context
+            all_messages = []
+            for msg in st.session_state.memory.chat_memory.messages:
+                role = "Student" if isinstance(msg, HumanMessage) else "Patient"
+                all_messages.append(f"{role}: {msg.content}")
+            
+            conversation_text = "\n".join(all_messages)
+            
+            # Create prompt that clearly separates the conversation from instructions
+            evaluation_prompt = f"""
+            להלן שיחה בין סטודנט לסיעוד ומטופל וירטואלי עם היפוגליקמיה:
+
+            {conversation_text}
+
+            ---
+
+            בהתבסס על השיחה לעיל בלבד, כתוב משוב ישיר לסטודנט בגוף ראשון.
+            הערך את הנקודות הבאות:
+
+            1. אמפתיה: התחל במשפט "גילית אמפתיה כש..." עם דוגמה ספציפית מהשיחה.
+            
+            2.בדיקות קריטיות: פרט אילו בדיקות נערכו ואילו לא: רמת סוכר, סטורציה, חום
+            למשל, 
+               - "ווידאת רמות סטורציה, אך פספסת לבדוק את רמת הסוכר. זו בדיקה קריטית שהיית חייב לבצע."
+            3. ..״זיהוי היפוגליקמיה: האם הסטודנט זיהה היפוגליקמיה? התחל במשפט ״המטופל סובל מהיפגליקמיה, התייחסת לרמת סוכר?
+            למשל, 
+              - "זיהית נכון את ההיפוגליקמיה, והמלצת מצוין על שתייה מתוקה."
+            4. המלצות לשיפור: תן לפחות 2 המלצות ברורות לשיפור.
+            """
+            
+            # Use direct LLM call instead of summarize chain for more control
+            feedback = st.session_state.llm.invoke(evaluation_prompt).content
+            
+            # Display feedback
+            st.write(feedback)
+            
+            # Save feedback to database
+            save_result(feedback, datetime.now(), st.session_state.user_email, st.session_state.session_id)
 
 
-# page = st.radio("Choose a page", ("home", "Chat", "Result"))
-# Display the corresponding page
+ # הוספת קישור אחרי הצגת המשוב
+            st.markdown("""
+            ---
+            📌 [תודה לכם על ההשתפות בסימולציה, הקליקו פה כדי לענות על שאלון](https://telavivmedicine.fra1.qualtrics.com/jfe/form/SV_cV1yfs9KIQDEEh8)
+            """, unsafe_allow_html=True)
+
+    
+            # Option to restart
+           # if st.button("התחל סימולציה חדשה"):
+           #     st.session_state.clear()
+              #  st.rerun()
+    except Exception as e:
+        st.error(f"שגיאה בהכנת המשוב: {e}")
+        if st.button("נסה שוב"):
+            st.rerun()
+# Page Routing
+if "page" not in st.session_state:
+    st.session_state.page = "Home"
+
 if st.session_state.page == "Home":
     page_home()
 elif st.session_state.page == "Chat":
     page_chat()
 elif st.session_state.page == "Result":
-    llm_page_result()
+    page_result()
