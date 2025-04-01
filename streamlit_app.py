@@ -42,7 +42,7 @@ def get_chat_history():
 def import_llm_models():
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
     llm = ChatOpenAI(api_key=OPENAI_API_KEY,
-                     model="gpt-4o-mini",
+                     model="gpt-4o",
                      temperature=0.3)
     return llm
 
