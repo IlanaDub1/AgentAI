@@ -173,12 +173,12 @@ def page_chat():
     st.markdown(
         """
               <div style="background-color: #e8f5e9; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
-            <strong>תיק רפואי:</strong> <br>
-            <strong> נשואה + 2. הריון שלישי. לידה בניתוח קיסרי לפני שבועיים <br>
-            <strong>מעשנת, 10 שנות קופסא <br>
-            <strong>השמנת יתר: לאחר ניתוח בריאטרי (Roux & Y) לפני 7 שנים <br>
-            <strong>סוכרת הריונית: טופלה באינסולין במהלך ההריון
-            </div>
+        <strong>תיק רפואי:</strong> <br>
+        <strong>נשואה +2, הריון שלישי:</strong> לידה בניתוח קיסרי לפני שבועיים. בת 32 <br>
+        <strong>עישון כבד:</strong> 15 שנות קופסא <br>
+        <strong>השמנת יתר:</strong> לאחר ניתוח בריאטרי (Roux & Y) לפני 7 שנים <br>
+        <strong>סוכרת הריונית:</strong> טופלה באינסולין במהלך ההריון
+        </div
         """,
         unsafe_allow_html=True
     )
