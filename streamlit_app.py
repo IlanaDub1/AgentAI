@@ -75,7 +75,7 @@ st.markdown("""
 
 # Initialize OpenAI Model
 def import_llm_models():
-    return ChatOpenAI(model="gpt-4o", temperature=0.7)
+    return ChatOpenAI(model="gpt-4o", temperature=0.5)
 
 # Initialize session state
 if 'chat_initialized' not in st.session_state:
@@ -260,6 +260,7 @@ def page_result():
              4. **נקודות לשיפור**
              תן לפחות 2 המלצות ברורות לשיפור            
 
+            לא צריך לכתוב ״ בהצלחה בהמשך הדרך, [שמך]
             """
             
             # Use direct LLM call instead of summarize chain for more control
