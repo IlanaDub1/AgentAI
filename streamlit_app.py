@@ -172,9 +172,9 @@ def page_chat():
     st.title("מוקד רפואה מרחוק")
     st.markdown(
         """
-              <div style="background-color: #d4edda; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
+              <div style="background-color: #c8e6c9; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
             <strong>תיק רפואי::</strong> <br>
-            <strong>הריון 3, ילד 2:</strong> לידה בניתוח קיסרי לפני שבועיים <br>
+            <strong>הריון 3, נשואה + 2:</strong> לידה בניתוח קיסרי לפני שבועיים <br>
             <strong>מעשנת, 10 שנות קופסא <br>
             <strong>השמנת יתר:</strong> לאחר ניתוח בריאטרי (Roux & Y) לפני 7 שנים <br>
             <strong>סוכרת הריונית:</strong> טופלה באינסולין במהלך ההריון
