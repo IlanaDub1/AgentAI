@@ -75,7 +75,7 @@ st.markdown("""
 
 # Initialize OpenAI Model
 def import_llm_models():
-    return ChatOpenAI(model="gpt-4o", temperature=0.6)
+    return ChatOpenAI(model="gpt-4o", temperature=0.7)
 
 # Initialize session state
 if 'chat_initialized' not in st.session_state:
