@@ -29,7 +29,7 @@ class ProductionConfig(BaseConfig):
     DEBUG = False
 
 # Choose the configuration based on the APP_ENV environment variable
-ENV = os.getenv("APP_ENV", "testing")  # Default to development
+ENV = os.getenv("APP_ENV", "development")  # Default to development
 
 if ENV == "development":
     Config = DevelopmentConfig
