@@ -172,10 +172,10 @@ def page_chat():
     st.title("מוקד רפואה מרחוק")
     st.markdown(
         """
-              <div style="background-color: #f0f8ff; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
-            <strong>תיק רפואי של גב' אנונימית:</strong> <br>
+              <div style="background-color: #d4edda; padding: 10px; border-radius: 10px; direction: rtl; text-align: right;">
+            <strong>תיק רפואי::</strong> <br>
             <strong>הריון 3, ילד 2:</strong> לידה בניתוח קיסרי לפני שבועיים <br>
-            <strong>עישון כבד:</strong> 10 שנות קופסא <br>
+            <strong>מעשנת, 10 שנות קופסא <br>
             <strong>השמנת יתר:</strong> לאחר ניתוח בריאטרי (Roux & Y) לפני 7 שנים <br>
             <strong>סוכרת הריונית:</strong> טופלה באינסולין במהלך ההריון
             </div>
