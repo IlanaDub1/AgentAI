@@ -125,7 +125,7 @@ def import_llm_models():
 # Initialize session state
 if 'chat_initialized' not in st.session_state:
     database.create_database()
-    st.session_state.session_id = create_new_session("Chat Session")
+    st.session_state.session_id = create_new_session("COPD")
     st.session_state.llm = import_llm_models()
     st.session_state.memory = ConversationBufferMemory(memory_key="chat_history", max_token_limit=3000)
 
