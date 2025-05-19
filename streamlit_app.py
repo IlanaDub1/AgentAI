@@ -330,11 +330,12 @@ def page_result():
 
 
  # הוספת קישור אחרי הצגת המשוב
-            st.markdown("""
-           ---
-           [תודה לכם על ההשתפות בסימולציה, הקליקו פה כדי לענות על שאלון](https://telavivmedicine.fra1.qualtrics.com/jfe/form/SV_cV1yfs9KIQDEEh8)
-            """, unsafe_allow_html=True)
+           st.markdown("""
+    <hr>
+    <a href="https://telavivmedicine.fra1.qualtrics.com/jfe/form/SV_cV1yfs9KIQDEEh8" target="_blank">תודה לכם על ההשתפות בסימולציה, הקליקו פה כדי לענות על שאלון</a>
+""", unsafe_allow_html=True)
 
+    
     
             # Option to restart
            # if st.button("התחל סימולציה חדשה"):
